@@ -20,32 +20,29 @@ jobs:
       - name: Install dependencies
         run: |
           python -m venv venv
-          source venv/bin/activate
+          . venv/bin/activate
           pip install -r requirements.txt
+        shell: bash
 
       - name: Run Tests
-        run: |
-          pytest
+        run: pytest
 
       - name: Notify Telex of Test Success
         if: success()
         run: |
           curl -X POST -H "Content-Type: application/json" -d '{
-          "event_name": "ci_pipeline",
-          "username": "GitHub Actions",
-          "status": "success",
-          "message":"✅ Tests passed successfully for PR ${{github.event.pull_request.number}}."
-          }'${{secrets.TELEX_WEBHOOK}}
-
+            "event_name": "ci_pipeline",
+            "username": "GitHub Actions",
+            "status": "success",
+            "message":"✅ Tests passed successfully for PR ${{github.event.pull_request.number}}."
+          }' "${{secrets.TELEX_WEBHOOK}}"
 
       - name: Notify Telex of Test Failure
         if: failure()
         run:  |
           curl -X POST -H "Content-Type: application/json" -d '{
-          "event_name": "ci_pipeline",
-          "username": "GitHub Actions",
-          "status": "failure",
-          "message": "❌ Test failed for PR ${{github.event.pull_request.number}}."
-          }'${{secrets.TELEX_WEBHOOK}}
-
-
+            "event_name": "ci_pipeline",
+            "username": "GitHub Actions",
+            "status": "failure",
+            "message": "❌ Test failed for PR ${{github.event.pull_request.number}}."
+          }' "${{secrets.TELEX_WEBHOOK}}"
