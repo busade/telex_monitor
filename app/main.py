@@ -73,6 +73,7 @@ def get_integration_json(request: Request):
                 {"label": "database_url", "type": "text", "required": True, "default": "postgresql://user:password@db-host:5432/yourdatabase"},
                 {"label": "Interval", "type": "dropdown", "required": True, "default": "*/4 * * * *"}
             ],
+            "target_url":"",
             "tick_url": f"{base_url}/tick"
         }
     }
