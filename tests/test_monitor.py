@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from main import app  # Ensure the correct import path to your FastAPI app
+from app.main import app  # Ensure the correct import path to your FastAPI app
 import pytest
 
 client = TestClient(app)
