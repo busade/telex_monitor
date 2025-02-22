@@ -155,7 +155,7 @@ async def monitor_task(payload: MonitorPayLoad):
         site = payload.get_setting("site")
 
         # Validate site and settings
-        sites = [s.default for s in payload.settings if s and isinstance(s.label, str) and s.label and s.label.startswith("site")]
+        sites = [s.default for s in payload.settings if s and isinstance(s.label, str) and s.label ]
 
         # Combine extracted sites
         if site:
