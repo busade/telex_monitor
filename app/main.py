@@ -151,7 +151,7 @@ async def check_site_status(site: str) -> Dict[str, str]:
 async def monitor_task(payload: MonitorPayLoad):
     """Background task to monitor database and send results."""
     try:
-        sites = [s.default for s in payload.settings]
+        sites = [s.default for s in payload.settings if s and isinstance(s.label, str) and s.label.startswith("site")]
 
         # Run all monitoring tasks concurrently
         monitoring_tasks = [
