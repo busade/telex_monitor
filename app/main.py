@@ -151,11 +151,22 @@ async def check_site_status(site: str) -> Dict[str, str]:
 async def monitor_task(payload: MonitorPayLoad):
     """Background task to monitor database and send results."""
     try:
-        sites = [s.default for s in payload.settings if s and "site" in s.label.lower()]
+        # Extract site directly if available
+        site = payload.get("site")
+
+        # Validate site and settings
+        sites = [s.default for s in payload.settings if s and isinstance(s.label, str) and s.label and s.label.startswith("site")]
+
+        # Combine extracted sites
+        if site:
+            sites.append(site)
+
+        if not sites:
+            return {"error": "No valid site provided in payload."}
 
         # Run all monitoring tasks concurrently
         monitoring_tasks = [
-            *(check_site_status(site) for site in sites),
+            *(check_site_status(s) for s in sites),
             check_database_connection(payload),
             get_database_size(payload),
             get_active_connections(payload),
@@ -164,9 +175,9 @@ async def monitor_task(payload: MonitorPayLoad):
 
         results = await asyncio.gather(*monitoring_tasks, return_exceptions=True)
 
-        # Convert results to string and handle exceptions
+        # **Ensure no `None` values in results**
         results_text = "\n".join(
-            str(result) if not isinstance(result, Exception) else f"Error: {result}"
+            str(result) if result is not None else "Error: Missing result"
             for result in results
         )
 
@@ -190,8 +201,10 @@ async def monitor_task(payload: MonitorPayLoad):
             )
 
     except Exception as e:
-        # Log or handle unexpected exceptions
-        print(f"Unexpected error in monitor_task: {e}")
+        logger.error(f"Unexpected error in monitor_task: {e}")
+
+
+
 @app.post("/tick", status_code=202)
 def monitor(payload: MonitorPayLoad, background_tasks: BackgroundTasks):
     background_tasks.add_task(monitor_task, payload)
