@@ -71,7 +71,7 @@ def get_integration_json(request: Request):
             "settings": [
                 {"label": "site", "type": "text", "required": True, "default": "https://postgres-monitor.onrender.com/"},
                 {"label": "database_url", "type": "text", "required": True, "default": "postgresql://user:password@db-host:5432/yourdatabase"},
-                {"label": "Interval", "type": "dropdown", "required": True, "default": "*/4 * * * *"}
+                {"label": "Interval", "type": "text", "required": True, "default": "*/4 * * * *"}
             ],
             "target_url":"https://ping.telex.im/v1/webhooks/01952975-1a16-7ecb-9126-fbf9c1056d0b",
             "tick_url": f"{base_url}/tick"
