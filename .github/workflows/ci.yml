@@ -24,7 +24,11 @@ jobs:
           pip install -r requirements.txt
         shell: bash
 
-   
+      - name: Run Tests
+        run: |
+          . venv/bin/activate
+          pytest --maxfail=3 --disable-warnings --tb=short
+        shell: bash
 
       - name: Notify Telex of Test Success
         if: success()
@@ -38,7 +42,7 @@ jobs:
 
       - name: Notify Telex of Test Failure
         if: failure()
-        run:  |
+        run: |
           curl -X POST -H "Content-Type: application/json" -d '{
             "event_name": "ci_pipeline",
             "username": "GitHub Actions",
