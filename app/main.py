@@ -152,7 +152,7 @@ async def monitor_task(payload: MonitorPayLoad):
     """Background task to monitor database and send results."""
     try:
         # Extract site directly if available
-        site = payload.get("site")
+        site = payload.get_setting("site")
 
         # Validate site and settings
         sites = [s.default for s in payload.settings if s and isinstance(s.label, str) and s.label and s.label.startswith("site")]
