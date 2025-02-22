@@ -60,7 +60,7 @@ def get_integration_json(request: Request):
                 "app_name": "Postgresql Database Performance",
                 "app_description": "Postgres Database Monitoring system",
                 "app_logo": "https://postgres-monitor.onrender.com",
-                "app_url": "https://postgres-monitor.onrender.com",
+                "app_url": "https://telex-monitor-ttdn.onrender.com",
                 "background_color": "#fff"
             },
             "is_active": True,
@@ -69,7 +69,7 @@ def get_integration_json(request: Request):
             "author": "Adesola",
             "integration_category": "Performance Monitoring",
             "settings": [
-                {"label": "site", "type": "text", "required": True, "default": "https://postgres-monitor.onrender.com/"},
+                {"label": "site", "type": "text", "required": True, "default": "https://telex-monitor-ttdn.onrender.com"},
                 {"label": "database_url", "type": "text", "required": True, "default": "postgresql://user:password@db-host:5432/yourdatabase"},
                 {"label": "Interval", "type": "text", "required": True, "default": "*/4 * * * *"}
             ],
