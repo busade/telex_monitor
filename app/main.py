@@ -69,7 +69,6 @@ def get_integration_json(request: Request):
             "author": "Adesola",
             "integration_category": "Performance Monitoring",
             "settings": [
-                {"label": "site", "type": "text", "required": True, "default": "https://telex-monitor-ttdn.onrender.com"},
                 {"label": "database_url", "type": "text", "required": True, "default": "postgresql://user:password@db-host:5432/yourdatabase"},
                 {"label": "Interval", "type": "text", "required": True, "default": "*/4 * * * *"}
             ],
@@ -79,44 +78,58 @@ def get_integration_json(request: Request):
     }
     return JSONResponse(integration_json)
 
-async def check_database_connection(payload: MonitorPayLoad):
+async def check_database_connection(database_url:str):
     """Check if the database is reachable."""
-    DATABASE_URL = payload.get_setting("database_url")
-    engine = get_db_engine(DATABASE_URL)
+    DATABASE_URL = database_url
+    if not DATABASE_URL:
+        return {"status": "error", "message": "No database URL provided."}
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.close()
-        return "Database is reachable"
+        async with asyncpg.create_pool(DATABASE_URL) as pool:
+            async with pool.acquire() as conn:
+                return {"status": "success", "message": "Database is reachable"}
     except Exception as e:
         logger.error(f"Database connection failed: {str(e)}")
-        return f"Database connection failed: {str(e)}"
+        return {"status": "error", "message": str(e)}
+        
+async def get_database_size(database_url:str):
+    DATABASE_URL = database_url
+    if not DATABASE_URL:                    
+        return {"status": "error", "message": "No database URL provided."}
 
-async def get_database_size(payload: MonitorPayLoad):
-    DATABASE_URL = payload.get_setting("database_url")
     engine = get_db_engine(DATABASE_URL)
     try:
-        async with engine.connect() as conn:
+        async with engine.begin() as conn:
             result = await conn.execute(text("SELECT pg_size_pretty(pg_database_size(current_database()));"))
-            return f"Database size: {await result.scalar()}"
+            return f"Database size: {result.scalar()}"
     except Exception as e:
         logger.error(f"Error retrieving database size: {str(e)}")
         return f"Error retrieving database size: {str(e)}"
 
-async def get_active_connections(payload: MonitorPayLoad):
-    DATABASE_URL = payload.get_setting("database_url")
+async def get_active_connections(database_url:str):
+    DATABASE_URL = database_url
+    if not DATABASE_URL:
+        return {"status": "error", "message": "No database URL provided."}
+
     engine = get_db_engine(DATABASE_URL)
+
     try:
-        async with engine.connect() as conn:
-            result = await conn.execute(text("SELECT COUNT(*) FROM pg_stat_activity"))
-            return f"Active connections: {await result.scalar()}"
+        async with engine.begin() as conn:
+            result = await conn.execute(text("SELECT COUNT(*) FROM pg_stat_activity;"))
+            active_connections = result.scalar_one_or_none()
+            return {"status": "success", "active_connections": active_connections}
     except Exception as e:
         logger.error(f"Error retrieving active connections: {str(e)}")
-        return f"Error retrieving active connections: {str(e)}"
+        return {"status": "error", "message": str(e)}
+    finally:
+        await engine.dispose()
+    
+async def get_long_running_queries(database_url:str):
+    DATABASE_URL = database_url
+    if not DATABASE_URL:
+        return {"status": "error", "message": "No database URL provided."}
 
-async def get_long_running_queries(payload: MonitorPayLoad):
-    DATABASE_URL = payload.get_setting("database_url")
     engine = get_db_engine(DATABASE_URL)
-    threshold = int(payload.get_setting("max_query_duration", 10))
+    threshold = 10
     try:
         async with engine.connect() as conn:
             result = await conn.execute(text(f"""
@@ -125,83 +138,63 @@ async def get_long_running_queries(payload: MonitorPayLoad):
                 WHERE state <> 'idle' AND (NOW() - query_start) > INTERVAL '{threshold} seconds' 
                 ORDER BY duration DESC;
             """))
-            long_queries = await result.fetchall()
+            long_queries =  result.fetchall()
             queries = [f"PID: {q[0]}, State: {q[1]}, Query: {q[2]}, Duration: {q[3]}s" for q in long_queries]
             return "\n".join(queries) if queries else "No long-running queries"
     except Exception as e:
         logger.error(f"Error retrieving long-running queries: {str(e)}")
         return f"Error retrieving long-running queries: {str(e)}"
     
-async def check_site_status(site: str) -> Dict[str, str]:
-    start_time = time.time()
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(site, timeout=10)
-            end_time = time.time()
-            return {
-                "site": site,
-                "status_code": response.status_code,
-                "response": response.text,
-                "response_time": round(end_time - start_time, 4)
-            }
-    except Exception as e:
-        end_time = time.time()
-        return {"site": site, "error": str(e), "response_time": round(end_time - start_time, 4)}
-
+print(MonitorPayLoad)
 async def monitor_task(payload: MonitorPayLoad):
     """Background task to monitor database and send results."""
-    try:
-        # Extract site directly if available
-        site = payload.get_setting("site")
+    try:    
+        # database_url = [s.default for s in payload.settings if s.label.startswith("database_url")]
+        database_url = payload.get_setting("database_url")
+        if not database_url:
+            return {"error": "No valid database_url provided in payload."}
 
-        # Validate site and settings
-        sites = [s.default for s in payload.settings if s and isinstance(s.label, str) and s.label ]
-
-        # Combine extracted sites
-        if site:
-            sites.append(site)
-
-        if not sites:
-            return {"error": "No valid site provided in payload."}
-
-        # Run all monitoring tasks concurrently
+        # Prepare monitoring tasks
         monitoring_tasks = [
-            *(check_site_status(s) for s in sites),
-            check_database_connection(payload),
-            get_database_size(payload),
-            get_active_connections(payload),
-            get_long_running_queries(payload)
+            check_database_connection(database_url),
+            get_database_size(database_url),
+            get_active_connections(database_url),
+            get_long_running_queries(database_url)
         ]
 
+        # Execute tasks concurrently
         results = await asyncio.gather(*monitoring_tasks, return_exceptions=True)
 
-        # **Ensure no `None` values in results**
-        results_text = "\n".join(
-            str(result) if result is not None else "Error: Missing result"
-            for result in results
-        )
+        formatted_results = []
+        for res in results:
+            if isinstance(res, Exception):
+                formatted_results.append(f"Error: {str(res)}")
+            else:
+                formatted_results.append(str(res))
 
-        # Determine status
+        # Format results
+        results_text = "\n".join(str(res) if res is not None else "Error: Missing result" for res in results)
         status = "error" if "Error" in results_text else "success"
 
-        # Construct the response payload
-        telex_format = {
+        # Prepare payload for notification
+        notification_payload = {
             "message": results_text,
             "username": "DB Monitor",
             "event_name": "Database Check",
             "status": status
         }
 
-        # Send results asynchronously
+        # Send results via HTTP request
         async with httpx.AsyncClient() as client:
             await client.post(
                 payload.return_url, 
-                json=telex_format, 
+                json=notification_payload, 
                 headers={"Content-Type": "application/json"}
             )
 
     except Exception as e:
         logger.error(f"Unexpected error in monitor_task: {e}")
+
 
 
 
